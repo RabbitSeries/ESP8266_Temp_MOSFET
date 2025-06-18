@@ -1,33 +1,61 @@
-#include <DallasTemperature.h>
-#include <OneWire.h>
+#include <LittleFS.h>
 
-const int FAN_PIN = D4;      // GPIO2 (NodeMCU D4)
-const int TEMP_PIN = D3;     // GPIO0 (NodeMCU D3)
-const float FAN_ON = 39.5;   // Turn fan ON above this temp (°C)
-const float FAN_OFF = 38.0;  // Turn fan OFF below this temp
+#include <thread>
 
-OneWire oneWire = OneWire( TEMP_PIN );
-DallasTemperature sensors = DallasTemperature( &oneWire );
-bool fanState = false;
-const long interval = 1000;  // Check interval (1 second)
-
+#include "TemperatureModule.h"
+#include "WifiModule.h"
+namespace Modules {
+    WifiModule* wifimodule = nullptr;
+    TemperatureModule* t_module = nullptr;
+    void handleWifi() {
+        wifimodule->run();
+    }
+    void handleTemperature() {
+        t_module->run();
+        static unsigned long beginTime = 0;
+        if ( millis() - beginTime > 2000 ) {
+            beginTime = millis();
+            Serial.printf( "Current fan status: %d", t_module->fan.status );
+            Serial.println( "" );
+            Serial.printf( "Current temperature: %.2f", t_module->current() );
+            Serial.println( "" );
+        }
+    }
+    void setupModules() {
+        wifimodule = new WifiModule();
+        wifimodule->config().begin();
+        t_module = new TemperatureModule( D0, D1 );
+        t_module->config( false ).begin();
+    }
+    void handleMoudles() {
+        handleWifi();
+        handleTemperature();
+    }
+}  // namespace Modules
 void setup() {
-  pinMode( FAN_PIN, OUTPUT );
-  digitalWrite( FAN_PIN, LOW );
-  pinMode( LED_BUILTIN, OUTPUT );
-  digitalWrite( LED_BUILTIN, LOW );
-  sensors.begin();
+    Serial.begin( 115200 );
+    LittleFS.begin();
+    Modules::setupModules();
+    using namespace Modules;
+    wifimodule->printNetworkInfo();
+    wifimodule->bind_restful( "/", []() {
+        File file = LittleFS.open( "/index.html", "r" );
+        if ( !file ) {
+            Modules::wifimodule->server.send( 500, "text/plain", "Failed to load index.html" );
+            return;
+        }
+        Modules::wifimodule->server.streamFile( file, "text/html" );
+        file.close();
+    } );
+    wifimodule->bind_restful( "/on", []() {
+        t_module->fan.ON();
+        wifimodule->server.send( 200, "text/plain", "ON!" );
+    } );
+    wifimodule->bind_restful( "/off", []() {
+        t_module->fan.OFF();
+        wifimodule->server.send( 200, "text/plain", "OFF!" );
+    } );
 }
-
 void loop() {
-  sensors.requestTemperatures();
-  float tempC = sensors.getTempCByIndex( 0 );
-  if ( tempC <= FAN_OFF ) {
-    fanState = false;
-  } else if ( tempC >= FAN_ON ) {
-    fanState = true;
-  }
-  digitalWrite( LED_BUILTIN, fanState ? LOW : HIGH );  // LED LOW Effect
-  digitalWrite( FAN_PIN, fanState ? HIGH : LOW );
-  delay( interval );
+    Modules::handleMoudles();
 }

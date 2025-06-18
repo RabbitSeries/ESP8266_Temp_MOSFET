@@ -1,5 +1,6 @@
 Language: Cpp
 BasedOnStyle: Google
-IndentWidth: 2
+IndentWidth: 4
 SpacesInParentheses: true
 ColumnLimit: 0
+NamespaceIndentation: All
