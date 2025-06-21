@@ -1,38 +1,26 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './App.css'
 import axios from "axios"
 import viteLogo from "./assets/vite.svg"
 import reactLogo from "./assets/react.svg"
 import espressifLogo from "./assets/espressif.svg"
-function sendCommand(StatusMessage: HTMLDivElement, cmd: string) {
-	axios.post("/" + cmd)
-		.then(res => StatusMessage.textContent = res.data)
-		.catch(err => StatusMessage.textContent = `${err} post: ${"/" + cmd}`);
-}
 
-interface data {
-	type: "Request" | "Post"
+interface DataType {
+	dataType: "TimerController" | "TemperatureController",
+	requestType: "get" | "set"
 }
-
-interface RequestJson extends data {
-	type: "Request",
-	requestTime: number,
+// interface TimerJson extends DataType {
+// 	dataType: "TimerController",
+// 	timeStamp?: string | number,
+// 	startStamp?: string | number,
+// 	duration?: string | number,
+// }
+interface TemperatureJson extends DataType {
+	dataType: "TemperatureController",
+	lowerTemp?: string | number,
+	upperTemp?: string | number
 }
-
-interface PostJson extends data {
-	type: "Post",
-	syncTime: number,
-	startTime: number,
-	duration: number
-}
-
-function submitData(StatusMessage: HTMLDivElement, data: PostJson | RequestJson) {
-	axios.post("/set/time", data)
-		.then(res => StatusMessage.textContent = res.data)
-		.catch(err => StatusMessage.textContent = "Error submitting value" + err);
-}
-
-function switchActivate(SelectedPane: HTMLDivElement, TimePane: HTMLDivElement, TemperaturePane: HTMLDivElement, StatusMessage: HTMLDivElement) {
+function switchActivate(SelectedPane: HTMLDivElement, TimePane: HTMLDivElement, TemperaturePane: HTMLDivElement, callback: (info: string) => void) {
 	if (SelectedPane.textContent?.startsWith("Time")) {
 		SelectedPane.textContent = "Temperature Controller"
 		TimePane.classList.replace("activate", "deactivate")
@@ -42,51 +30,69 @@ function switchActivate(SelectedPane: HTMLDivElement, TimePane: HTMLDivElement, 
 		TemperaturePane.classList.replace("activate", "deactivate")
 		TimePane.classList.replace("deactivate", "activate")
 	}
-	StatusMessage.textContent = "Configured to" + SelectedPane.textContent + " (not saved)"
+	callback(`Configured to ${SelectedPane.textContent} (not saved)`)
 }
-function readCurrentTemperature(replace: HTMLInputElement) {
-	const request: RequestJson = {
-		type: 'Request',
-		requestTime: 0
+function readCurrentTemperature(setter: (val: string) => void) {
+	const request: TemperatureJson = {
+		dataType: 'TemperatureController',
+		requestType: 'get'
 	}
-	axios.post("/get/Temp", request).then(res => replace.textContent = res.data)
+	axios.post("/get", request).then(res => setter(res.data.current))
 }
-
+function formatTime(date: Date) {
+	return date.toLocaleString('en-GB', {
+		hour: '2-digit',
+		minute: '2-digit',
+		second: '2-digit',
+		hour12: false,
+	})
+}
 function App() {
-	const TimeStamp = useRef<HTMLInputElement>(null)
-	const StartTime = useRef<HTMLInputElement>(null)
-	const Duration = useRef<HTMLInputElement>(null)
-	const StatusMessage = useRef<HTMLDivElement>(null)
-	const TimePane = useRef<HTMLDivElement>(null), TemperaturePane = useRef<HTMLDivElement>(null), SelectedPane = useRef<HTMLDivElement>(null)
-	let TimeStampInterval = useRef(0), TimeZoneInterval = useRef(0)
-	const lowerBoundTemp = useRef<HTMLInputElement>(null), upperBoundTemp = useRef<HTMLInputElement>(null)
+	const refs = {
+		timePane: useRef<HTMLDivElement>(null),
+		tempPane: useRef<HTMLDivElement>(null),
+		selectedPane: useRef<HTMLDivElement>(null),
+		stampInterval: useRef(0),
+		durationInterval: useRef(0)
+	}
+	const [statusMessage, setSatusMessage] = useState(`Configured to Temperature Controller (not saved)`)
+	const [timeStamp, setTimeStamp] = useState("")
+	const [startStamp, setStartStamp] = useState("")
+	const [duration, setDuration] = useState("")
+	const [lowerTemp, setLower] = useState("")
+	const [upperTemp, setUpper] = useState("")
+	function submitData(data: DataType) {
+		axios.post("/set", data.dataType === "TimerController" ?
+			Object.assign(data, {
+				timeStamp,
+				startStamp,
+				duration
+			}) :
+			Object.assign(data, {
+				lowerTemp,
+				upperTemp
+			}))
+			.then(res => setSatusMessage(`Saved with response: ${res.data}`))
+			.catch(err => setSatusMessage("Error submitting value: " + err));
+	}
+	function sendCommand(cmd: string) {
+		axios.post("/" + cmd)
+			.then(res => setSatusMessage(res.data))
+			.catch(err => setSatusMessage(`${err} post: ${"/" + cmd}`));
+	}
 	useEffect(() => {
-		TimeStampInterval.current = setInterval(() => {
-			const utc_now = new Date(Date.now())
-			TimeStamp.current!.value = utc_now.toLocaleString('en-GB', {
-				hour: '2-digit',
-				minute: '2-digit',
-				second: '2-digit',
-				hour12: false,
-			})
-		}, 1000);
-		TimeZoneInterval.current = setInterval(() => {
+		refs.stampInterval.current = setInterval(() => setTimeStamp(formatTime(new Date())), 1000);
+		refs.durationInterval.current = setInterval(() => {
 			const durationDate = new Date()
-			StartTime.current!.value = durationDate.toLocaleString('en-GB', {
-				hour: '2-digit',
-				minute: '2-digit',
-				second: '2-digit',
-				hour12: false,
-			})
+			setStartStamp(formatTime(durationDate))
 			durationDate.setHours(6, 0, 0);
-			Duration.current!.value = durationDate.toLocaleString('en-GB', {
-				hour: '2-digit',
-				minute: '2-digit',
-				second: '2-digit',
-				hour12: false,
-			})
-		}, 1000);
-	}, [TimeStampInterval, TimeZoneInterval, TimeStamp, StartTime, Duration])
+			setDuration(formatTime(durationDate))
+		}, 1000)
+		return () => {
+			clearInterval(refs.stampInterval.current);
+			clearInterval(refs.durationInterval.current);
+		}
+	}, [])
 	return (
 		<div className="input-col" >
 			<div>
@@ -97,7 +103,7 @@ function App() {
 					<img src={reactLogo} className="logo react" alt="React logo" />
 				</a>
 				<a href="https://www.espressif.com" target="_blank">
-					<img src={espressifLogo} className="logo espressifL" alt="Espressif logo" />
+					<img src={espressifLogo} className="logo espressif" alt="Espressif logo" />
 				</a>
 			</div>
 			<h2>Vite + React + ESP8266 + TypeScript</h2>
@@ -105,63 +111,57 @@ function App() {
 			<h1>Fan Controller</h1>
 
 			<div className="input-row">
-				<button onClick={() => sendCommand(StatusMessage.current!, 'on')}>Turn ON</button>
-				<button onClick={() => sendCommand(StatusMessage.current!, 'off')}>Turn OFF</button>
+				<button onClick={() => sendCommand('on')}>Turn ON</button>
+				<button onClick={() => sendCommand('off')}>Turn OFF</button>
 			</div>
 
 			<div className="selective">
-				<div ref={TimePane} className="activatePane deactivate">
+				<div ref={refs.timePane} className="input-row activatePane deactivate">
 					<div className="input-row">
 						<div className="input-col">
 							<div className="input-row">
 								<div>SynchronizeTime</div>
-								<input type="text" ref={TimeStamp} title="Seperator ':' is allowed" placeholder="HHMMSS"
-									onClick={() => clearInterval(TimeStampInterval.current)} />
+								<input type="text" title="Seperator ':' is allowed" placeholder="HHMMSS"
+									onClick={() => clearInterval(refs.stampInterval.current)} value={timeStamp} />
 							</div>
 							<div className="input-row">
 								<div>Start</div>
-								<input type="text" ref={StartTime} title="Seperator ':' is allowed" placeholder="HHMM"
-									onClick={() => clearInterval(TimeZoneInterval.current)} />
+								<input type="text" title="Seperator ':' is allowed" placeholder="HHMM"
+									onClick={() => clearInterval(refs.durationInterval.current)} value={startStamp} />
 								<div>Duration</div>
-								<input type="text" ref={Duration} title="Seperator ':' is allowed" placeholder="HHMM" />
-
+								<input type="text" title="Seperator ':' is allowed" placeholder="HHMM" value={duration} />
 							</div>
 						</div>
-						<button type="button" onClick={() => submitData(StatusMessage.current!, {
-							type: 'Request',
-							requestTime: 0
-						})}>Submit</button>
+						<button type="button" onClick={() => submitData({ dataType: "TimerController", requestType: "set" })} className="input-col">Submit</button>
 					</div>
 				</div>
 
-				<div className="button" onClick={() => { switchActivate(SelectedPane.current!, TimePane.current!, TemperaturePane.current!, StatusMessage.current!) }}>
+				<div className="button" onClick={() => { switchActivate(refs.selectedPane.current!, refs.timePane.current!, refs.tempPane.current!, setSatusMessage) }}>
 					↑↓
-					<div ref={SelectedPane} hidden={true}>Temperature Contoller</div>
+					<div ref={refs.selectedPane} hidden={true}>Temperature Contoller</div>
 				</div>
 
-				<div ref={TemperaturePane} className="activatePane activate">
+				<div ref={refs.tempPane} className="input-col activatePane activate">
 					<div className="input-row">
 						Temperature bounds
 					</div>
 					<div className="input-row">
-						<div className="input-col">
-							<div>Lower</div>
-							<input type="text" ref={lowerBoundTemp} placeholder="℃" />
-							<button type="button" onClick={() => readCurrentTemperature(lowerBoundTemp.current!)}>Use current</button>
-						</div>
-						<div className="input-col">
-							<div>Upper</div>
-							<input type="text" ref={upperBoundTemp} placeholder="℃" />
-							<button type="button" onClick={() => readCurrentTemperature(upperBoundTemp.current!)}>Use current</button>
-						</div>
-						<button type="button" onClick={() => submitData(StatusMessage.current!, {
-							type: "Request",
-							requestTime: 0
-						})}>Submit</button>
+						{[{ label: 'Lower', val: lowerTemp, setter: setLower }, { label: 'Upper', val: upperTemp, setter: setUpper }].map(({ label, val, setter }, i) => (
+							<div className="input-col" key={i}>
+								<div>{label}</div>
+								<input type="text" value={val} placeholder="℃" />
+								<button type="button" onClick={() => {
+									readCurrentTemperature(setter)
+								}}>Use current</button>
+							</div>
+						))}
+						<button type="button" onClick={() => submitData({ dataType: "TemperatureController", requestType: "set" })}>
+							Submit
+						</button>
 					</div>
 				</div>
 			</div>
-			<div className="status" ref={StatusMessage}>Configured to Temperature Controller (not saved)</div>
+			<div className="status" >{statusMessage}</div>
 		</div>
 	)
 }
