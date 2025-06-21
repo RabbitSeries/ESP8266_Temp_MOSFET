@@ -1,16 +1,13 @@
 import { useEffect, useRef } from 'react'
 import './App.css'
 import axios from "axios"
+import viteLogo from "./assets/vite.svg"
+import reactLogo from "./assets/react.svg"
+import espressifLogo from "./assets/espressif.svg"
 function sendCommand(StatusMessage: HTMLDivElement, cmd: string) {
-	axios.get("/" + cmd)
-		.then(res => {
-			console.log(`Done ${res.data}`)
-			StatusMessage.textContent = res.data
-		})
-		.catch(err => {
-			console.log("Error")
-			StatusMessage.textContent = err
-		});
+	axios.post("/" + cmd)
+		.then(res => StatusMessage.textContent = res.data)
+		.catch(err => StatusMessage.textContent = `${err} post: ${"/" + cmd}`);
 }
 
 interface data {
@@ -31,7 +28,7 @@ interface PostJson extends data {
 
 function submitData(StatusMessage: HTMLDivElement, data: PostJson | RequestJson) {
 	axios.post("/set/time", data)
-		.then(res => StatusMessage.textContent = "Received: " + JSON.stringify(res.data))
+		.then(res => StatusMessage.textContent = res.data)
 		.catch(err => StatusMessage.textContent = "Error submitting value" + err);
 }
 
@@ -92,6 +89,19 @@ function App() {
 	}, [TimeStampInterval, TimeZoneInterval, TimeStamp, StartTime, Duration])
 	return (
 		<div className="input-col" >
+			<div>
+				<a href="https://vite.dev" target="_blank">
+					<img src={viteLogo} className="logo" alt="Vite logo" />
+				</a>
+				<a href="https://react.dev" target="_blank">
+					<img src={reactLogo} className="logo react" alt="React logo" />
+				</a>
+				<a href="https://www.espressif.com" target="_blank">
+					<img src={espressifLogo} className="logo espressifL" alt="Espressif logo" />
+				</a>
+			</div>
+			<h2>Vite + React + ESP8266 + TypeScript</h2>
+
 			<h1>Fan Controller</h1>
 
 			<div className="input-row">
