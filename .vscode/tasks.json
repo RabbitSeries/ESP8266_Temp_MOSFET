@@ -1,0 +1,15 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "PlatformIO: WorkFlow",
+            "dependsOn": [
+                "PlatformIO: Build Filesystem Image (esp12e)",
+                "PlatformIO: Upload Filesystem Image (esp12e)",
+                "PlatformIO: Upload and Monitor"
+            ],
+            "group": "build",
+            "dependsOrder": "sequence"
+        }
+    ]
+}

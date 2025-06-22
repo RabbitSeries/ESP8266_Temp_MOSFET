@@ -13,6 +13,7 @@
 .logo.react:hover {
   filter: drop-shadow(0 0 2em #61dafbaa);
 }
+
 .logo.espressif:hover {
   filter: drop-shadow(0 0 2em #dd5264aa);
 }
@@ -44,30 +45,29 @@ h2 {
   line-height: 0;
 }
 
+.input-col,
 .input-row {
-  width: 100%;
   display: flex;
-  gap: 5px;
-  margin: 10px;
+  width: max-content;
+  height: max-content;
   align-items: center;
   justify-content: center;
+  padding: 5px;
+  gap: 5px;
 }
 
 .input-col {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
   gap: 5px;
-  margin: 5px;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
 }
 
 .button,
 button {
-  padding: 10px 20px;
+  font: inherit;
+  padding: 10px 15px;
   font-size: 16px;
   border: none;
+  margin: 5px;
   border-radius: 5px;
   background: #007bff;
   color: white;
@@ -87,6 +87,7 @@ label {
 
 input[type="text"] {
   padding: 10px;
+  font: inherit;
   font-size: 16px;
   width: 100px;
   border-radius: 5px;
@@ -116,6 +117,7 @@ input[type="text"] {
 }
 
 .selective {
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;

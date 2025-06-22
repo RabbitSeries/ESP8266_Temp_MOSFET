@@ -1,0 +1,17 @@
+.justify_col,
+.justify_row {
+    /* Expand to full page */
+    width: 100%;
+    height: 100%;
+    /* Align to center */
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.justify_col {
+    /* Squeeze to center */
+    width: max-content;
+    height: 100%;
+    flex-direction: column;
+}

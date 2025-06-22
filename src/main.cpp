@@ -1,6 +1,7 @@
 #include <LittleFS.h>
 
 #include <iomanip>
+#include <set>
 #include <sstream>
 
 #include "ArduinoJson.h"
@@ -8,12 +9,18 @@
 #include "TimerModule.h"
 #include "WifiModule.h"
 #include "utils.h"
-
 namespace Data {
     unsigned long time_offset = 0;
 }
 
 namespace Modules {
+    struct dataTypes {
+        static std::set<String> dataType;
+        static std::set<String> requestType;
+    };
+    std::set<String> dataTypes::dataType( { "TimerController", "TemperatureController" } );
+    std::set<String> dataTypes::requestType( { "get", "set" } );
+
     WifiModule* wifimodule = nullptr;
     bool isTempControll = true;
     TemperatureModule* t_module = nullptr;
@@ -102,31 +109,69 @@ namespace Modules {
                 wifimodule->server.send( 400, "application/json", "{\"error\":\"Invalid JSON\"}" );
                 return;
             }
-            int syncTime = doc["syncTime"] | -1;
-            int beginTime = doc["startTime"] | -1;
-            int duration = doc["duration"] | -1;
-            Serial.printf( "Received number via JSON: {syncTime: %d}\n", syncTime );
-            Serial.printf( "Received number via JSON: {startTime: %d}\n", beginTime );
-            Serial.printf( "Received number via JSON: {duration: %d}\n", duration );
-            Data::time_offset = syncTime;
-            if ( timer_module )
-                delete timer_module;
-            timer_module = new TimerModule(
-                []() {
-                    using namespace Data;
-                    return time_offset + millis();
-                },
-                utils::HHMMSS2Millis( beginTime ),
-                utils::HHMMSS2Millis( duration ) );
-            timer_module->begin();
-            JsonDocument res;
-            res["syncTime"] = utils::HHMMSS( syncTime );
-            res["beginTime"] = utils::HHMMSS( beginTime );
-            res["duration"] = utils::HHMMSS( duration );
-            String response;
-            serializeJson( res, response );
-            wifimodule->server.send( 200, "application/json", response );
+            String dataType = doc["dataType"] | "", requestType = doc["requestType"] | "";
+            if ( !dataTypes::dataType.count( dataType ) || !dataTypes::requestType.count( requestType ) ) {
+                wifimodule->server.send( 400, "application/json", "{\"error\":\"Invalid JSON\"}" );
+                return;
+            }
+            if ( dataType == "TimerController" ) {
+                responseTimerController( doc );
+            } else {
+                responseTempController( doc );
+            }
         } );
+    }
+    void responseTimerController( JsonDocument& doc ) {
+        int syncTime = doc["syncTime"] | -1;
+        int beginTime = doc["startTime"] | -1;
+        int duration = doc["duration"] | -1;
+        Serial.printf( "Received number via JSON: {syncTime: %d}\n", syncTime );
+        Serial.printf( "Received number via JSON: {startTime: %d}\n", beginTime );
+        Serial.printf( "Received number via JSON: {duration: %d}\n", duration );
+        Data::time_offset = syncTime;
+        if ( timer_module )
+            delete timer_module;
+        timer_module = new TimerModule(
+            []() {
+                using namespace Data;
+                return time_offset + millis();
+            },
+            utils::HHMMSS2Millis( beginTime ),
+            utils::HHMMSS2Millis( duration ) );
+        timer_module->begin();
+        JsonDocument res;
+        res["syncTime"] = utils::HHMMSS( syncTime );
+        res["beginTime"] = utils::HHMMSS( beginTime );
+        res["duration"] = utils::HHMMSS( duration );
+        String response;
+        serializeJson( res, response );
+        wifimodule->server.send( 200, "application/json", response );
+    }
+    void responseTempController( JsonDocument& doc ) {
+        int syncTime = doc["syncTime"] | -1;
+        int beginTime = doc["startTime"] | -1;
+        int duration = doc["duration"] | -1;
+        Serial.printf( "Received number via JSON: {syncTime: %d}\n", syncTime );
+        Serial.printf( "Received number via JSON: {startTime: %d}\n", beginTime );
+        Serial.printf( "Received number via JSON: {duration: %d}\n", duration );
+        Data::time_offset = syncTime;
+        if ( timer_module )
+            delete timer_module;
+        timer_module = new TimerModule(
+            []() {
+                using namespace Data;
+                return time_offset + millis();
+            },
+            utils::HHMMSS2Millis( beginTime ),
+            utils::HHMMSS2Millis( duration ) );
+        timer_module->begin();
+        JsonDocument res;
+        res["syncTime"] = utils::HHMMSS( syncTime );
+        res["beginTime"] = utils::HHMMSS( beginTime );
+        res["duration"] = utils::HHMMSS( duration );
+        String response;
+        serializeJson( res, response );
+        wifimodule->server.send( 200, "application/json", response );
     }
 }  // namespace Modules
 
