@@ -6,7 +6,7 @@ export default defineConfig((env: ConfigEnv) => {
   const config: UserConfig = {
     plugins: [react(), viteSingleFile()],
     build: {
-      outDir: env.mode === "deploy" ? "../../demo" : "../../data",
+      outDir: env.mode === "deploy" ? "../../docs" : "../../data",
       sourcemap: false,
       minify: "terser",
       emptyOutDir: true
