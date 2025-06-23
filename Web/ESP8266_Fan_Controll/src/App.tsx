@@ -33,6 +33,8 @@ function App() {
 	const [duration, setDuration] = useState("")
 	const [lowerTemp, setLower] = useState("")
 	const [upperTemp, setUpper] = useState("")
+	const [intervalStatus, setIntervalStatus] = useState(true)
+	const [durationIntervalStatus, setDurationIntervalStatus] = useState(true)
 	function switchActivate(switchTo?: HTMLDivElement) {
 		const SelectedPane = refs.selectedPane.current!, TimePane = refs.timePane.current!, TemperaturePane = refs.tempPane.current!
 		let switchRes: string | null = null
@@ -84,13 +86,17 @@ function App() {
 			.catch(err => setSatusMessage(`${err} post: ${"/" + cmd}`));
 	}
 	useEffect(() => {
-		refs.stampInterval.current = setInterval(() => setTimeStamp(formatTime(new Date())), 1000);
-		refs.durationInterval.current = setInterval(() => {
-			const durationDate = new Date()
-			setStartStamp(formatTime(durationDate))
-			durationDate.setHours(6, 0, 0);
-			setDuration(formatTime(durationDate))
-		}, 1000)
+		if (intervalStatus) {
+			refs.stampInterval.current = setInterval(() => setTimeStamp(formatTime(new Date())), 1000);
+		}
+		if (durationIntervalStatus) {
+			refs.durationInterval.current = setInterval(() => {
+				const durationDate = new Date()
+				setStartStamp(formatTime(durationDate))
+				durationDate.setHours(6, 0, 0);
+				setDuration(formatTime(durationDate))
+			}, 1000)
+		}
 		return () => {
 			clearInterval(refs.stampInterval.current);
 			clearInterval(refs.durationInterval.current);
@@ -125,12 +131,22 @@ function App() {
 							<div className="input-row">
 								<div>Synchronize time</div>
 								<input type="text" title="Seperator ':' is allowed" placeholder="HHMMSS"
-									onMouseDown={() => clearInterval(refs.stampInterval.current)} defaultValue={timeStamp} />
+									onMouseDown={() => {
+										if (intervalStatus) {
+											setIntervalStatus(false)
+											clearInterval(refs.stampInterval.current)
+										}
+									}} defaultValue={timeStamp} />
 							</div>
 							<div className="input-row">
 								<div>Start</div>
 								<input type="text" title="Seperator ':' is allowed" placeholder="HHMM"
-									onMouseDown={() => clearInterval(refs.durationInterval.current)} defaultValue={startStamp} />
+									onMouseDown={() => {
+										if (setDurationIntervalStatus) {
+											setDurationIntervalStatus(false)
+											clearInterval(refs.durationInterval.current)
+										}
+									}} defaultValue={startStamp} />
 								<div>Duration</div>
 								<input type="text" title="Seperator ':' is allowed" placeholder="HHMM" defaultValue={duration} />
 							</div>
