@@ -5,19 +5,19 @@ import viteLogo from "./assets/vite.svg"
 import reactLogo from "./assets/react.svg"
 import espressifLogo from "./assets/espressif.svg"
 interface DataType {
-	dataType: "TimerController" | "TemperatureController",
-	requestType: "get" | "set"
+	controller: "TimerController" | "TemperatureController",
+	request_type: "get" | "set"
 }
-// interface TimerJson extends DataType {
-// 	dataType: "TimerController",
-// 	timeStamp?: string | number,
-// 	startStamp?: string | number,
-// 	duration?: string | number,
-// }
+interface TimerJson extends DataType {
+	controller: "TimerController",
+	syncTime?: number,
+	startTime?: number,
+	duration?: number,
+}
 interface TemperatureJson extends DataType {
-	dataType: "TemperatureController",
-	lowerTemp?: string | number,
-	upperTemp?: string | number
+	controller: "TemperatureController",
+	lowerTemp?: number,
+	upperTemp?: number
 }
 function App() {
 	const refs = {
@@ -28,8 +28,8 @@ function App() {
 		durationInterval: useRef(0)
 	}
 	const [statusMessage, setSatusMessage] = useState(`Configured to Temperature Controller (not saved)`)
-	const [timeStamp, setTimeStamp] = useState("")
-	const [startStamp, setStartStamp] = useState("")
+	const [syncTime, setSyncTime] = useState("")
+	const [startTime, setStartTime] = useState("")
 	const [duration, setDuration] = useState("")
 	const [lowerTemp, setLower] = useState("")
 	const [upperTemp, setUpper] = useState("")
@@ -49,13 +49,27 @@ function App() {
 		}
 		setSatusMessage(`${switchRes ? `Configured to ${switchRes}` : "Invaild"} (not saved)`)
 	}
+	function readCurrentTime(setter: (val: string) => void) {
+		const request: TimerJson = {
+			controller: 'TimerController',
+			request_type: 'get'
+		}
+		axios.post("/data", request)
+			.then(res => {
+				setter('currentTime' in res.data ? `currentTime: ${res.data.currentTime}` : "Invaild time")
+			})
+			.catch(err => setter(`Error reading current temperature: ${err}`))
+	}
 	function readCurrentTemperature(setter: (val: string) => void) {
 		const request: TemperatureJson = {
-			dataType: 'TemperatureController',
-			requestType: 'get'
+			controller: 'TemperatureController',
+			request_type: 'get'
 		}
-		axios.post("/get", request)
-			.then(res => setter(res.data.current))
+		axios.post("/data", request)
+			.then(res => {
+				setSatusMessage(`Recieved: ${JSON.stringify(res.data)}`)
+				setter('currentTemp' in res.data ? res.data.currentTemp : "Invaild temp")
+			})
 			.catch(err => setSatusMessage(`Error reading current temperature: ${err}`))
 	}
 	function formatTime(date: Date) {
@@ -67,32 +81,36 @@ function App() {
 		})
 	}
 	function submitData(data: DataType) {
-		axios.post("/set", data.dataType === "TimerController" ?
-			Object.assign(data, {
-				timeStamp: timeStamp.replaceAll(":", ""),
-				startStamp: startStamp.replaceAll(":", ""),
-				duration: duration.replaceAll(":", "")
-			}) :
-			Object.assign(data, {
-				lowerTemp,
-				upperTemp
-			}))
-			.then(res => setSatusMessage(`Saved with response: ${res.data}`))
-			.catch(err => setSatusMessage("Error submitting value: " + err));
+		const temp_request: TemperatureJson = {
+			controller: 'TemperatureController',
+			request_type: 'set',
+			lowerTemp: +lowerTemp,
+			upperTemp: +upperTemp
+		}
+		const timer_request: TimerJson = {
+			controller: 'TimerController',
+			request_type: 'set',
+			syncTime: +syncTime.replaceAll(":", ""),
+			startTime: +startTime.replaceAll(":", ""),
+			duration: +duration.replaceAll(":", "")
+		}
+		axios.post("/set", data.controller === "TimerController" ? timer_request : temp_request)
+			.then(res => setSatusMessage(`Saved with response: ${JSON.stringify(res.data)}`))
+			.catch(err => setSatusMessage(`Error submitting value: ${err}`));
 	}
 	function sendCommand(cmd: string) {
 		axios.post("/" + cmd)
-			.then(res => setSatusMessage(res.data))
+			.then(res => setSatusMessage(JSON.stringify(res.data)))
 			.catch(err => setSatusMessage(`${err} post: ${"/" + cmd}`));
 	}
 	useEffect(() => {
 		if (intervalStatus) {
-			refs.stampInterval.current = setInterval(() => setTimeStamp(formatTime(new Date())), 1000);
+			refs.stampInterval.current = setInterval(() => setSyncTime(formatTime(new Date())), 1000);
 		}
 		if (durationIntervalStatus) {
 			refs.durationInterval.current = setInterval(() => {
 				const durationDate = new Date()
-				setStartStamp(formatTime(durationDate))
+				setStartTime(formatTime(durationDate))
 				durationDate.setHours(6, 0, 0);
 				setDuration(formatTime(durationDate))
 			}, 1000)
@@ -136,22 +154,25 @@ function App() {
 											setIntervalStatus(false)
 											clearInterval(refs.stampInterval.current)
 										}
-									}} defaultValue={timeStamp} />
+									}} value={syncTime} onChange={(e) => setSyncTime(e.currentTarget.value)} />
 							</div>
 							<div className="input-row">
 								<div>Start</div>
-								<input type="text" title="Seperator ':' is allowed" placeholder="HHMM"
+								<input type="text" title="Seperator ':' is allowed" placeholder="HHMMSS"
 									onMouseDown={() => {
 										if (setDurationIntervalStatus) {
 											setDurationIntervalStatus(false)
 											clearInterval(refs.durationInterval.current)
 										}
-									}} defaultValue={startStamp} />
+									}} value={startTime} onChange={(e) => { setStartTime(e.currentTarget.value) }} />
 								<div>Duration</div>
-								<input type="text" title="Seperator ':' is allowed" placeholder="HHMM" defaultValue={duration} />
+								<input type="text" title="Seperator ':' is allowed" placeholder="HHMMSS" defaultValue={duration} />
 							</div>
 						</div>
-						<button type="button" onClick={() => submitData({ dataType: "TimerController", requestType: "set" })} >Submit</button>
+						<button type="button" onClick={() => {
+							submitData({ controller: "TimerController", request_type: "set" });
+							readCurrentTime(setSatusMessage)
+						}} >Submit</button>
 					</div>
 
 					<div className="button" onClick={() => switchActivate()}>
@@ -167,20 +188,20 @@ function App() {
 							{[{ label: 'Lower', val: lowerTemp, setter: setLower }, { label: 'Upper', val: upperTemp, setter: setUpper }].map(({ label, val, setter }, i) => (
 								<div className="input-col" key={i}>
 									<div>{label}</div>
-									<input type="text" defaultValue={val} placeholder="℃" />
-									<button type="button" onClick={() => {
+									<input type="text" value={val} placeholder="℃" onChange={(e) => setter(e.currentTarget.value)} />
+									< button type="button" onClick={() => {
 										readCurrentTemperature(setter)
 									}}>Use current</button>
 								</div>
 							))}
 							<button type="button" onClick={() => {
-								submitData({ dataType: "TemperatureController", requestType: "set" })
+								submitData({ controller: "TemperatureController", request_type: "set" })
 							}}>Submit</button>
 						</div>
 					</div>
 				</div>
 				<div className="status" >{statusMessage}</div>
-			</div>
+			</div >
 		</>
 	)
 }

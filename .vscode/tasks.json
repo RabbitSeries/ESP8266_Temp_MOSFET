@@ -2,14 +2,84 @@
     "version": "2.0.0",
     "tasks": [
         {
+            "label": "PlatformIO: WorkFlow::build",
+            "dependsOn": [
+                "npm: build - Web/ESP8266_Fan_Controll",
+                "PlatformIO: Build"
+            ],
+            "problemMatcher": [],
+            "dependsOrder": "parallel"
+        },
+        {
             "label": "PlatformIO: WorkFlow",
             "dependsOn": [
+                "PlatformIO: WorkFlow::build",
                 "PlatformIO: Build Filesystem Image (esp12e)",
                 "PlatformIO: Upload Filesystem Image (esp12e)",
                 "PlatformIO: Upload and Monitor"
             ],
-            "group": "build",
+            "problemMatcher": [],
             "dependsOrder": "sequence"
-        }
+        },
+        {
+            "type": "PlatformIO",
+            "task": "Build",
+            "problemMatcher": [
+                "$platformio"
+            ],
+            "presentation": {
+                "group": "BuildPhase",
+                "reveal": "silent"
+            },
+            "label": "PlatformIO: Build"
+        },
+        {
+            "type": "PlatformIO",
+            "task": "Upload and Monitor",
+            "problemMatcher": [
+                "$platformio"
+            ],
+            "label": "PlatformIO: Upload and Monitor",
+            "presentation": {
+                "group": "Monitor",
+                "reveal": "always"
+            }
+        },
+        {
+            "type": "npm",
+            "script": "build",
+            "path": "Web/ESP8266_Fan_Controll",
+            "presentation": {
+                "group": "BuildPhase",
+                "reveal": "silent"
+            },
+            "problemMatcher": [],
+            "label": "npm: build - Web/ESP8266_Fan_Controll",
+            "detail": "tsc -b && vite build"
+        },
+        {
+            "type": "PlatformIO",
+            "task": "Build Filesystem Image (esp12e)",
+            "problemMatcher": [
+                "$platformio"
+            ],
+            "presentation": {
+                "group": "BuildPhase",
+                "reveal": "silent"
+            },
+            "label": "PlatformIO: Build Filesystem Image (esp12e)"
+        },
+        {
+            "type": "PlatformIO",
+            "task": "Upload Filesystem Image (esp12e)",
+            "problemMatcher": [
+                "$platformio"
+            ],
+            "label": "PlatformIO: Upload Filesystem Image (esp12e)",
+            "presentation": {
+                "group": "BuildPhase",
+                "reveal": "silent"
+            }
+        },
     ]
 }
