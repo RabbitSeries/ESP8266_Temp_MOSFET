@@ -14,7 +14,7 @@ namespace utils {
             << std::setw( 2 ) << ss;
         return iss.str().c_str();
     }
-    String Millis2Str( unsigned long time ) {
+    String Millis2HHMMSSStr( unsigned long time ) {
         time /= 1000;
         int hh = ( time / 60 / 60 ) % 24, mm = ( time / 60 ) % 60, ss = time % 60;
         std::stringstream iss;

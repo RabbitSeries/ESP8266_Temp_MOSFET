@@ -15,15 +15,15 @@ WifiModule& WifiModule::configAP(
     return *this;
 }
 void WifiModule::startConnection( const String& ssid, const String& pswd, unsigned long timeout ) {
-    WiFi.begin( ssid, pswd );
-    Serial.println( "" );
-    Serial.print( "Begin connection" );
-    unsigned long record = 0;
-    while ( record < timeout && !WiFi.isConnected() ) {
-        delay( 500 );
-        record += 500;
-        Serial.print( "." );
+    if ( connectionState == ConnectionState::CONNECTING ) {
+        Serial.println( "Connection canceled" );
+        WiFi.disconnect();
     }
+    connectionState = ConnectionState::CONNECTING;
+    WiFi.begin( ssid, pswd );
+    Serial.println( "Begin connection" );
+    connectionStartTime = millis();
+    connectionTimeout = timeout;
 }
 std::optional<JsonDocument> WifiModule::pendJson() {
     std::optional<JsonDocument> res = std::nullopt;
@@ -52,4 +52,18 @@ void WifiModule::printNetworkInfo() {
 }
 void WifiModule::run() {
     server.handleClient();
+    if ( connectionState != ConnectionState::CONNECTING ) {
+        return;
+    }
+    if ( WiFi.isConnected() ) {
+        connectionState = ConnectionState::CONNECTED;
+        Serial.println( "\nConnected! IP: " + WiFi.localIP().toString() );
+        Serial.println( "Gateway: " + WiFi.gatewayIP().toString() );
+
+    } else if ( millis() - connectionStartTime < connectionTimeout ) {
+        Serial.println( "ConnectingWifi...." );
+    } else {
+        connectionState = ConnectionState::FAILED;
+        WiFi.disconnect();
+    }
 }

@@ -85,7 +85,7 @@ label {
   border-bottom-width: 1px;
 }
 
-input[type="text"] {
+input[type="text"],input[type="password"] {
   padding: 10px;
   font: inherit;
   font-size: 16px;

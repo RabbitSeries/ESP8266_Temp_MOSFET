@@ -1,3 +1,4 @@
+#include <ArduinoJson.h>
 #include <LittleFS.h>
 
 #include <iomanip>
@@ -5,7 +6,6 @@
 #include <sstream>
 #include <utility>
 
-#include "ArduinoJson.h"
 #include "TemperatureModule.h"
 #include "TimerModule.h"
 #include "WifiModule.h"
@@ -17,18 +17,18 @@ namespace Modules {
         std::vector<String> timer_datas{ "syncTime", "startTime", "duration" };
         std::vector<String> temperature_datas{ "lowerTemp", "upperTemp" };
         bool verifyConnection( JsonDocument const& doc ) {
-            return doc["controller"].is<const char*>() && doc["request_type"].is<const char*>();
+            return doc["controller"].is<JsonVariantConst>() && doc["request_type"].is<JsonVariantConst>();
         }
         bool verifyTimerData( JsonDocument const& doc ) {
-            return std::all_of( timer_datas.begin(), timer_datas.end(), [&doc = std::as_const( doc )]( const String& v ) { return doc.is<JsonVariant>(); } );
+            return std::all_of( timer_datas.begin(), timer_datas.end(), [&doc = std::as_const( doc )]( const String& v ) { return doc[v].is<JsonVariantConst>(); } );
         }
         bool verifyTempData( JsonDocument const& doc ) {
-            return std::all_of( temperature_datas.begin(), temperature_datas.end(), [&doc = std::as_const( doc )]( const String& v ) { return doc[v].is<JsonVariant>(); } );
+            return std::all_of( temperature_datas.begin(), temperature_datas.end(), [&doc = std::as_const( doc )]( const String& v ) { return doc[v].is<JsonVariantConst>(); } );
         }
     };  // namespace dataTypes
 
     FAN fan{ D0 };
-    float lower_temp = -127.0, upper_temp = -127.0;
+    float lower_temp = 32, upper_temp = 35;
     unsigned long time_offset = 0;
     WifiModule* wifimodule = nullptr;
     TemperatureModule* t_module = nullptr;
@@ -44,19 +44,21 @@ namespace Modules {
         t_module->begin();
         timer_module = new TimerModule(
             getRealTime, 0, 0, []() { Serial.println( "Timer duration finished" ); } );
+        controller = t_module;
     }
     void handleMoudles() {
         static unsigned long beginTime = 0;
         wifimodule->run();
-        timer_module->run();
-        t_module->run();
-        if ( controller.has_value() && controller == t_module ) {
+        if ( controller ) {
+            controller.value()->run();
+        }
+        if ( controller == t_module ) {
             if ( !fan.status && t_module->currentTemp() >= upper_temp ) {
                 fan.ON();
             } else if ( fan.status && t_module->currentTemp() <= lower_temp ) {
                 fan.OFF();
             }
-        } else if ( controller.has_value() && controller == timer_module ) {
+        } else if ( controller == timer_module ) {
             if ( !fan.status && timer_module->isTriggering() ) {
                 fan.ON();
             } else if ( fan.status && !timer_module->isTriggering() ) {
@@ -72,13 +74,13 @@ namespace Modules {
         }
     }
     void responseTimerController( JsonDocument& doc ) {
-        doc["currentTime"] = utils::Millis2Str( getRealTime() ).c_str();
+        doc["currentTime"] = utils::Millis2HHMMSSStr( getRealTime() ).c_str();
     }
     void responseTempController( JsonDocument& doc ) {
         doc["currentTemp"] = t_module->currentTemp();
     }
     bool configTimerController( JsonDocument& doc ) {
-        if ( dataTypes::verifyTimerData( doc ) ) {
+        if ( !dataTypes::verifyTimerData( doc ) ) {
             Serial.println( "Verification failed" );
             return false;
         }
@@ -91,7 +93,7 @@ namespace Modules {
         return true;
     }
     bool configTempController( JsonDocument& doc ) {
-        if ( dataTypes::verifyTempData( doc ) ) {
+        if ( !dataTypes::verifyTempData( doc ) ) {
             Serial.println( "Verification failed" );
             return false;
         }
@@ -101,6 +103,7 @@ namespace Modules {
     }
     void bind_restful_apis() {
         wifimodule->bind_restful( "/", []() {
+            // wifimodule->server.client().setTimeout( 20000 );
             Serial.println( "Pending connection" );
             File file = LittleFS.open( "/index.html", "r" );
             if ( !file ) {
@@ -124,10 +127,20 @@ namespace Modules {
         } );
         wifimodule->bind_restful( "/connection", []() {
             Serial.println( "Pending connection" );
-            std::optional<JsonDocument> doc = wifimodule->pendJson();
-            if ( doc && doc.value()["ssid"].is<const char*>() && doc.value()["password"].is<const char*>() ) {
-                JsonDocument& v = doc.value();
-                wifimodule->startConnection( v["ssid"].as<String>(), v["password"].as<String>() );
+            String response;
+            std::optional<JsonDocument> pendRes = wifimodule->pendJson();
+            if ( pendRes && pendRes.value()["ssid"].is<JsonVariant>() && pendRes.value()["password"].is<JsonVariant>() ) {
+                JsonDocument& doc = pendRes.value();
+                wifimodule->startConnection( doc["ssid"].as<String>(), doc["password"].as<String>() );
+                doc["message"] = "connection started";
+                serializeJson( doc, response );
+                wifimodule->server.send( 200, "application/json", response );
+            } else {
+                JsonDocument doc;
+                doc["DHCP IP"] = wifimodule->DHCPIP();
+                doc["DHCP gateway"] = WiFi.gatewayIP().toString();
+                serializeJson( doc, response );
+                wifimodule->server.send( 200, "application/json", response );
             }
         } );
         const auto dataApi = []() {
@@ -138,7 +151,8 @@ namespace Modules {
             }
             std::optional<JsonDocument> pendRes = wifimodule->pendJson();
             if ( !pendRes || !dataTypes::verifyConnection( pendRes.value() ) ) {
-                wifimodule->server.send( 400, "application/json", "{\"error\":\"Bad JSON\"}" );
+                Serial.println( "Connection verification failed" );
+                wifimodule->server.send( 400, "application/json", R"({"error":"Bad JSON"})" );
                 return;
             }
             JsonDocument& doc = pendRes.value();
