@@ -4,6 +4,7 @@ import axios from "axios"
 import viteLogo from "./assets/vite.svg"
 import reactLogo from "./assets/react.svg"
 import espressifLogo from "./assets/espressif.svg"
+import TemperatureChart from './TemperatureChart.tsx'
 interface DataType {
 	controller: "TimerController" | "TemperatureController",
 	request_type: "get" | "set"
@@ -24,8 +25,8 @@ function App() {
 		timePane: useRef<HTMLDivElement>(null),
 		tempPane: useRef<HTMLDivElement>(null),
 		selectedPane: useRef<HTMLDivElement>(null),
-		stampInterval: useRef(0),
-		durationInterval: useRef(0)
+		stampInterval: useRef<NodeJS.Timeout>(null),
+		durationInterval: useRef<NodeJS.Timeout>(null)
 	}
 	const [statusMessage, setSatusMessage] = useState(`Configured to Temperature Controller (not saved)`)
 	const [syncTime, setSyncTime] = useState("")
@@ -60,17 +61,25 @@ function App() {
 			})
 			.catch(err => setter(`Error reading current temperature: ${err}`))
 	}
-	function readCurrentTemperature(setter: (val: string) => void) {
+	async function readCurrentTemperature(setter?: (val: string) => void) {
 		const request: TemperatureJson = {
 			controller: 'TemperatureController',
 			request_type: 'get'
 		}
-		axios.post("/data", request)
-			.then(res => {
-				setSatusMessage(`Recieved: ${JSON.stringify(res.data)}`)
-				setter('currentTemp' in res.data ? res.data.currentTemp : "Invaild temp")
-			})
-			.catch(err => setSatusMessage(`Error reading current temperature: ${err}`))
+		let response = -127.0
+		try {
+			const res = await axios.post("/proxy/data", request)
+				// const res = await axios.post("/data", request)
+				.then(res => res.data)
+			setSatusMessage(`Received: ${JSON.stringify(res)}`)
+			if (setter) {
+				setter('currentTemp' in res ? res.currentTemp : "Invaild temp")
+			}
+			response = +res.currentTemp
+		} catch (err) {
+			setSatusMessage(`Error reading current temperature: ${err}`)
+		}
+		return response
 	}
 	function formatTime(date: Date) {
 		return date.toLocaleString('en-GB', {
@@ -116,33 +125,35 @@ function App() {
 			}, 1000)
 		}
 		return () => {
-			clearInterval(refs.stampInterval.current);
-			clearInterval(refs.durationInterval.current);
+			clearInterval(refs.stampInterval.current ?? undefined);
+			refs.stampInterval.current = null;
+			clearInterval(refs.durationInterval.current ?? undefined);
+			refs.durationInterval.current = null;
 		}
 	})
 	return (
-		<>
-			<div className="input-col" >
-				<div className='input-row'>
-					<a href="https://vite.dev" target="_blank">
-						<img src={viteLogo} className="logo" alt="Vite logo" />
-					</a>
-					<a href="https://react.dev" target="_blank">
-						<img src={reactLogo} className="logo react" alt="React logo" />
-					</a>
-					<a href="https://www.espressif.com" target="_blank">
-						<img src={espressifLogo} className="logo espressif" alt="Espressif logo" />
-					</a>
-				</div>
-				<h2 className="input-row">Vite + React + ESP8266 + TypeScript</h2>
+		<div className="input-col" >
+			<div className='input-row'>
+				<a href="https://vite.dev" target="_blank">
+					<img src={viteLogo} className="logo" alt="Vite logo" />
+				</a>
+				<a href="https://react.dev" target="_blank">
+					<img src={reactLogo} className="logo react" alt="React logo" />
+				</a>
+				<a href="https://www.espressif.com" target="_blank">
+					<img src={espressifLogo} className="logo espressif" alt="Espressif logo" />
+				</a>
+			</div>
+			<h2 className="input-row">Vite + React + ESP8266 + TypeScript</h2>
 
-				<h1 className="input-row">Fan Controller</h1>
+			<h1 className="input-row">Fan Controller</h1>
 
-				<div className="input-row">
-					<button onClick={() => sendCommand('on')}>Turn ON</button>
-					<button onClick={() => sendCommand('off')}>Turn OFF</button>
-				</div>
+			<div className="input-row">
+				<button onClick={() => sendCommand('on')}>Turn ON</button>
+				<button onClick={() => sendCommand('off')}>Turn OFF</button>
+			</div>
 
+			<div className='input-row'>
 				<div className="selective">
 					<div ref={refs.timePane} className="input-row activatePane deactivate" onClick={e => switchActivate(e.currentTarget)}>
 						<div className="input-col">
@@ -152,7 +163,7 @@ function App() {
 									onMouseDown={() => {
 										if (intervalStatus) {
 											setIntervalStatus(false)
-											clearInterval(refs.stampInterval.current)
+											clearInterval(refs.stampInterval.current ?? undefined)
 										}
 									}} value={syncTime} onChange={(e) => setSyncTime(e.currentTarget.value)} />
 							</div>
@@ -162,7 +173,7 @@ function App() {
 									onMouseDown={() => {
 										if (setDurationIntervalStatus) {
 											setDurationIntervalStatus(false)
-											clearInterval(refs.durationInterval.current)
+											clearInterval(refs.durationInterval.current ?? undefined)
 										}
 									}} value={startTime} onChange={(e) => { setStartTime(e.currentTarget.value) }} />
 								<div>Duration</div>
@@ -179,7 +190,6 @@ function App() {
 						↑↓
 						<div ref={refs.selectedPane} hidden={true}>Temperature Contoller</div>
 					</div>
-
 					<div ref={refs.tempPane} className="input-col activatePane activate" onClick={e => switchActivate(e.currentTarget)}>
 						<div className="input-row">
 							Temperature bounds
@@ -200,9 +210,12 @@ function App() {
 						</div>
 					</div>
 				</div>
-				<div className="status" >{statusMessage}</div>
-			</div >
-		</>
+				<TemperatureChart intervalMs={2000} dataToKeep={30} fetchTemperature={async () => {
+					return await readCurrentTemperature()
+				}}></TemperatureChart>
+			</div>
+			<div className="status" >{statusMessage}</div>
+		</div >
 	)
 }
 

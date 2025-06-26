@@ -12,7 +12,15 @@ export default defineConfig((env: ConfigEnv) => {
       emptyOutDir: true
     },
     server: {
-      open: true
+      open: true,
+      port: 5174,
+      proxy: {
+        '/proxy': {
+          target: 'http://192.168.1.32',
+          changeOrigin: true,
+          rewrite: path => path.replace(/^\/proxy/, '')
+        }
+      }
     }
   }
   return config
